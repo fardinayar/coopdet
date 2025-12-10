@@ -15,7 +15,9 @@ from mmdet3d.registry import MODELS
 from mmdet3d.structures import xywhr2xyxyr
 
 # Import from mmdet (only types, not builders)
-from mmdet.models.task_modules import AssignResult, PseudoSampler, build_sampler
+from mmdet.models.task_modules import AssignResult
+# Import 3D sampler from mmdet3d (supports bboxes_3d)
+from mmdet3d.models.task_modules.samplers import PseudoSampler
 # Use mmdet3d's TASK_UTILS registry for custom coders/assigners
 from mmdet3d.registry import TASK_UTILS
 from mmdet.models.utils import multi_apply
@@ -226,7 +228,7 @@ class TransFusionHead(nn.Module):
             return
 
         if self.sampling:
-            self.bbox_sampler = build_sampler(self.train_cfg.get('sampler'))
+            self.bbox_sampler = TASK_UTILS.build(self.train_cfg.get('sampler'))
         else:
             self.bbox_sampler = PseudoSampler()
         assigner = self.train_cfg.get('assigner')
