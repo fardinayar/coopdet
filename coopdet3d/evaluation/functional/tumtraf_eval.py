@@ -70,13 +70,14 @@ def bev_iou(gt_box: dict, pred_box: dict) -> float:
 
     # Build tensors: [x, y, z, dx, dy, dz, yaw]
     # Using origin=(0.5, 0.5, 0.5) to match KITTI/NuScenes convention
+    # Both GT and predictions use [length, width, height] - no swap needed
     gt_tensor = np.array([[
         gt_box["translation"][0],  # x
         gt_box["translation"][1],  # y
         gt_box["translation"][2],  # z
-        gt_size[0],                # dx (width)
-        gt_size[1],                # dy (length)
-        gt_size[2],                # dz (height)
+        gt_size[0],                # dx = length
+        gt_size[1],                # dy = width
+        gt_size[2],                # dz = height
         gt_box["rotation"]         # yaw
     ]], dtype=np.float32)
 
@@ -84,9 +85,9 @@ def bev_iou(gt_box: dict, pred_box: dict) -> float:
         pred_box["translation"][0],
         pred_box["translation"][1],
         pred_box["translation"][2],
-        pred_size[0],
-        pred_size[1],
-        pred_size[2],
+        pred_size[0],              # dx = length
+        pred_size[1],              # dy = width
+        pred_size[2],              # dz = height
         pred_box["rotation"]
     ]], dtype=np.float32)
 
@@ -146,13 +147,14 @@ def iou_3d(gt_box: dict, pred_box: dict) -> float:
         return 0.0
 
     # Build tensors: [x, y, z, dx, dy, dz, yaw]
+    # Both GT and predictions use [length, width, height] - no swap needed
     gt_tensor = np.array([[
         gt_box["translation"][0],
         gt_box["translation"][1],
         gt_box["translation"][2],
-        gt_size[0],
-        gt_size[1],
-        gt_size[2],
+        gt_size[0],                # dx = length
+        gt_size[1],                # dy = width
+        gt_size[2],                # dz = height
         gt_box["rotation"]
     ]], dtype=np.float32)
 
@@ -160,9 +162,9 @@ def iou_3d(gt_box: dict, pred_box: dict) -> float:
         pred_box["translation"][0],
         pred_box["translation"][1],
         pred_box["translation"][2],
-        pred_size[0],
-        pred_size[1],
-        pred_size[2],
+        pred_size[0],              # dx = length
+        pred_size[1],              # dy = width
+        pred_size[2],              # dz = height
         pred_box["rotation"]
     ]], dtype=np.float32)
 
