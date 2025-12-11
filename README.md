@@ -1,6 +1,8 @@
 # CoopDet3D: Cooperative 3D Object Detection
 ## TUMTraf V2X Dataset with mmengine
 
+> **Note**: This repository is just an upgrade of [coopdet3d](https://github.com/tum-traffic-dataset/coopdet3d) to the latest version of mmdet3d.
+
 Multi-modal cooperative 3D object detection for vehicle and infrastructure sensors using camera, LiDAR, and fusion approaches.
 
 ## Features
