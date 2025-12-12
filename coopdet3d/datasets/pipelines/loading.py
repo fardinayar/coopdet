@@ -1,13 +1,18 @@
 """Loading transforms for cooperative 3D detection."""
 import numpy as np
+from os import path as osp
 from PIL import Image
 
-from mmdet3d.registry import TRANSFORMS
+from mmdet3d.registry import TRANSFORMS as MMDet3D_TRANSFORMS
+from mmengine.registry import TRANSFORMS as MMEngine_TRANSFORMS
 from mmdet3d.structures.points import BasePoints, get_points_type
 from mmdet3d.datasets.transforms import LoadAnnotations3D as MMDet3DLoadAnnotations3D
 from mmengine.fileio import get
 
 from .loading_utils import load_augmented_point_cloud, reduce_LiDAR_beams
+
+# Use mmdet3d's TRANSFORMS registry as primary
+TRANSFORMS = MMDet3D_TRANSFORMS
 
 
 @TRANSFORMS.register_module()
@@ -345,13 +350,288 @@ class LoadPointsFromMultiSweepsCoop:
         return f"{self.__class__.__name__}(sweeps_num={self.sweeps_num})"
 
 
+@MMDet3D_TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
+class LoadPointsFromFileCoopGT:
+    """Load Points From File for cooperative perception GT database creation.
+    
+    This version loads from registered_lidar_path and creates registered_points
+    for ground truth database creation.
+
+    Args:
+        coord_type (str): The type of coordinates of points cloud.
+        load_dim (int): The dimension of the loaded points. Defaults to 6.
+        use_dim (list[int]): Which dimensions of the points to be used.
+            Defaults to [0, 1, 2].
+        shift_height (bool): Whether to use shifted height. Defaults to False.
+        use_color (bool): Whether to use color features. Defaults to False.
+        load_augmented (str | None): Type of augmented point cloud. Defaults to None.
+        reduce_beams (int | None): Number of beams to reduce to. Defaults to None.
+    """
+
+    def __init__(
+        self,
+        coord_type,
+        load_dim=6,
+        use_dim=[0, 1, 2],
+        shift_height=False,
+        use_color=False,
+        load_augmented=None,
+        reduce_beams=None,
+    ):
+        self.shift_height = shift_height
+        self.use_color = use_color
+        if isinstance(use_dim, int):
+            use_dim = list(range(use_dim))
+        assert (
+            max(use_dim) < load_dim
+        ), f"Expect all used dimensions < {load_dim}, got {use_dim}"
+        assert coord_type in ["CAMERA", "LIDAR", "DEPTH"]
+
+        self.coord_type = coord_type
+        self.load_dim = load_dim
+        self.use_dim = use_dim
+        self.load_augmented = load_augmented
+        self.reduce_beams = reduce_beams
+
+    def _load_points(self, lidar_path):
+        """Private function to load point clouds data.
+        
+        Args:
+            lidar_path (str): Filename of point clouds data.
+            
+        Returns:
+            np.ndarray: An array containing point clouds data.
+        """
+        # Check file existence (equivalent to mmcv.check_file_exist)
+        if not osp.exists(lidar_path):
+            raise FileNotFoundError(f"Point cloud file not found: {lidar_path}")
+        
+        if self.load_augmented:
+            assert self.load_augmented in ["pointpainting", "mvp"]
+            virtual = self.load_augmented == "mvp"
+            points = load_augmented_point_cloud(
+                lidar_path, virtual=virtual, reduce_beams=self.reduce_beams
+            )
+        elif lidar_path.endswith(".npy"):
+            points = np.load(lidar_path)
+        else:
+            points = np.fromfile(lidar_path, dtype=np.float32)
+
+        return points
+
+    def __call__(self, results):
+        """Call function to load points data from file."""
+        registered_lidar_path = results["registered_lidar_path"]
+        points = self._load_points(registered_lidar_path)
+        points = points.reshape(-1, self.load_dim)
+
+        if self.reduce_beams and self.reduce_beams < 32:
+            points = reduce_LiDAR_beams(points, self.reduce_beams)
+
+        points = points[:, self.use_dim]
+        attribute_dims = None
+
+        if self.shift_height:
+            floor_height = np.percentile(points[:, 2], 0.99)
+            height = points[:, 2] - floor_height
+            points = np.concatenate(
+                [points[:, :3], np.expand_dims(height, 1), points[:, 3:]], 1
+            )
+            attribute_dims = dict(height=3)
+
+        if self.use_color:
+            assert len(self.use_dim) >= 6
+            if attribute_dims is None:
+                attribute_dims = dict()
+            attribute_dims.update(
+                dict(
+                    color=[
+                        points.shape[1] - 3,
+                        points.shape[1] - 2,
+                        points.shape[1] - 1,
+                    ]
+                )
+            )
+
+        points_class = get_points_type(self.coord_type)
+        registered_points = points_class(
+            points, points_dim=points.shape[-1], attribute_dims=attribute_dims
+        )
+        results["registered_points"] = registered_points
+
+        return results
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f"(coord_type={self.coord_type}, "
+        repr_str += f"load_dim={self.load_dim}, "
+        repr_str += f"use_dim={self.use_dim})"
+        return repr_str
+
+
+@MMDet3D_TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
+class LoadPointsFromMultiSweepsCoopGT:
+    """Load points from multiple sweeps for cooperative perception GT database creation.
+    
+    This version works with registered_points for ground truth database creation.
+
+    Args:
+        sweeps_num (int): Number of sweeps. Defaults to 10.
+        load_dim (int): Dimension number of the loaded points. Defaults to 5.
+        use_dim (list[int]): Which dimension to use. Defaults to [0, 1, 2, 4].
+        pad_empty_sweeps (bool): Whether to repeat keyframe when sweeps is empty.
+        remove_close (bool): Whether to remove close points.
+        test_mode (bool): If test_model=True used for testing.
+        load_augmented (str | None): Type of augmented point cloud.
+        reduce_beams (int | None): Number of beams to reduce to.
+    """
+
+    def __init__(
+        self,
+        sweeps_num=10,
+        load_dim=5,
+        use_dim=[0, 1, 2, 4],
+        pad_empty_sweeps=False,
+        remove_close=False,
+        test_mode=False,
+        load_augmented=None,
+        reduce_beams=None,
+    ):
+        self.load_dim = load_dim
+        self.sweeps_num = sweeps_num
+        if isinstance(use_dim, int):
+            use_dim = list(range(use_dim))
+        self.use_dim = use_dim
+        self.pad_empty_sweeps = pad_empty_sweeps
+        self.remove_close = remove_close
+        self.test_mode = test_mode
+        self.load_augmented = load_augmented
+        self.reduce_beams = reduce_beams
+
+    def _load_points(self, lidar_path):
+        """Private function to load point clouds data.
+        
+        Args:
+            lidar_path (str): Filename of point clouds data.
+            
+        Returns:
+            np.ndarray: An array containing point clouds data.
+        """
+        # Check file existence (equivalent to mmcv.check_file_exist)
+        if not osp.exists(lidar_path):
+            raise FileNotFoundError(f"Point cloud file not found: {lidar_path}")
+        
+        if self.load_augmented:
+            assert self.load_augmented in ["pointpainting", "mvp"]
+            virtual = self.load_augmented == "mvp"
+            points = load_augmented_point_cloud(
+                lidar_path, virtual=virtual, reduce_beams=self.reduce_beams
+            )
+        elif lidar_path.endswith(".npy"):
+            points = np.load(lidar_path)
+        else:
+            points = np.fromfile(lidar_path, dtype=np.float32)
+        return points
+
+    def _remove_close(self, points, radius=1.0):
+        """Removes point too close within a certain radius from origin."""
+        if isinstance(points, np.ndarray):
+            points_numpy = points
+        elif isinstance(points, BasePoints):
+            points_numpy = points.tensor.numpy()
+        else:
+            raise NotImplementedError
+        x_filt = np.abs(points_numpy[:, 0]) < radius
+        y_filt = np.abs(points_numpy[:, 1]) < radius
+        not_close = np.logical_not(np.logical_and(x_filt, y_filt))
+        return points[not_close]
+
+    def __call__(self, results):
+        """Call function to load multi-sweep point clouds from files.
+        
+        Args:
+            results (dict): Result dict containing multi-sweep point cloud filenames.
+            
+        Returns:
+            dict: The result dict containing the multi-sweep points data.
+        """
+        points = results["registered_points"]
+        points.tensor[:, 4] = 0
+        sweep_points_list = [points]
+        ts = results["timestamp"] / 1e6
+        
+        if self.pad_empty_sweeps and len(results["registered_sweeps"]) == 0:
+            for i in range(self.sweeps_num):
+                if self.remove_close:
+                    sweep_points_list.append(self._remove_close(points))
+                else:
+                    sweep_points_list.append(points)
+        else:
+            if len(results["registered_sweeps"]) <= self.sweeps_num:
+                choices = np.arange(len(results["registered_sweeps"]))
+            elif self.test_mode:
+                choices = np.arange(self.sweeps_num)
+            else:
+                # NOTE: seems possible to load frame -11?
+                if not self.load_augmented:
+                    choices = np.random.choice(
+                        len(results["registered_sweeps"]), self.sweeps_num, replace=False
+                    )
+                else:
+                    # don't allow to sample the earliest frame, match with Tianwei's implementation.
+                    choices = np.random.choice(
+                        len(results["registered_sweeps"]) - 1, self.sweeps_num, replace=False
+                    )
+            
+            for idx in choices:
+                sweep = results["registered_sweeps"][idx]
+                points_sweep = self._load_points(sweep["data_path"])
+                points_sweep = np.copy(points_sweep).reshape(-1, self.load_dim)
+
+                # TODO: make it more general
+                if self.reduce_beams and self.reduce_beams < 32:
+                    points_sweep = reduce_LiDAR_beams(points_sweep, self.reduce_beams)
+
+                if self.remove_close:
+                    points_sweep = self._remove_close(points_sweep)
+                sweep_ts = sweep["timestamp"] / 1e6
+                points_sweep[:, :3] = (
+                    points_sweep[:, :3] @ sweep["sensor2lidar_rotation"].T
+                )
+                points_sweep[:, :3] += sweep["sensor2lidar_translation"]
+                points_sweep[:, 4] = ts - sweep_ts
+                points_sweep = points.new_point(points_sweep)
+                sweep_points_list.append(points_sweep)
+
+        points = points.cat(sweep_points_list)
+        points = points[:, self.use_dim]
+        results["registered_points"] = points
+        return results
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        return f"{self.__class__.__name__}(sweeps_num={self.sweeps_num})"
+
+
 # Re-export LoadAnnotations3D from mmdet3d
+# Also register it in mmengine registry for compatibility with mmengine's Compose
 LoadAnnotations3D = MMDet3DLoadAnnotations3D
+# Register the class in mmengine registry (it's already registered in mmdet3d registry)
+try:
+    MMEngine_TRANSFORMS.register_module(name='LoadAnnotations3D', module=MMDet3DLoadAnnotations3D, force=False)
+except (KeyError, ValueError):
+    # Already registered or registration failed, that's okay
+    pass
 
 __all__ = [
     'LoadMultiViewImageFromFilesCoop',
     'LoadPointsFromFileCoop',
     'LoadPointsFromMultiSweepsCoop',
+    'LoadPointsFromFileCoopGT',
+    'LoadPointsFromMultiSweepsCoopGT',
     'LoadAnnotations3D',
 ]
 

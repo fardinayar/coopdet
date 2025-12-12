@@ -3,6 +3,8 @@ from .loading import (
     LoadMultiViewImageFromFilesCoop,
     LoadPointsFromFileCoop,
     LoadPointsFromMultiSweepsCoop,
+    LoadPointsFromFileCoopGT,
+    LoadPointsFromMultiSweepsCoopGT,
     LoadAnnotations3D,
 )
 from .transforms_3d import (
@@ -32,6 +34,8 @@ __all__ = [
     'LoadMultiViewImageFromFilesCoop',
     'LoadPointsFromFileCoop',
     'LoadPointsFromMultiSweepsCoop',
+    'LoadPointsFromFileCoopGT',
+    'LoadPointsFromMultiSweepsCoopGT',
     'LoadAnnotations3D',
     # Transforms (custom for coop)
     'ImageAug3DCoop',

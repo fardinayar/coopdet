@@ -18,6 +18,14 @@ import os
 from mmdet3d.structures.ops import box_np_ops
 from coopdet3d.datasets import build_dataset
 
+# Import custom transforms to ensure they are registered in mmdet3d.registry.TRANSFORMS
+# This must happen at module level to ensure registration happens before build_dataset is called
+# Explicitly import the classes to trigger the @TRANSFORMS.register_module() decorators
+from coopdet3d.datasets.pipelines.loading import (  # noqa: F401
+    LoadPointsFromFileCoopGT,
+    LoadPointsFromMultiSweepsCoopGT,
+)
+
 
 def create_groundtruth_database(
         dataset_class_name,
@@ -147,11 +155,16 @@ def create_groundtruth_database(
                 ],
             )
 
-    # Ensure custom transforms are imported and registered before building dataset
-    # This must happen before build_dataset is called
-    import coopdet3d.datasets.pipelines.loading  # noqa: F401
-    import coopdet3d.datasets.pipelines.transforms_3d  # noqa: F401
-    import coopdet3d.datasets.pipelines.formating  # noqa: F401
+    # Ensure the transforms are registered in mmengine registry before building dataset
+    # Import again here to ensure registration happens (in case module wasn't fully loaded)
+    from coopdet3d.datasets.pipelines.loading import (  # noqa: F401
+        LoadPointsFromFileCoopGT,
+        LoadPointsFromMultiSweepsCoopGT,
+    )
+    # Verify registration
+    from mmengine.registry import TRANSFORMS as MMEngine_TRANSFORMS
+    if 'LoadPointsFromFileCoopGT' not in MMEngine_TRANSFORMS._module_dict:
+        raise RuntimeError("LoadPointsFromFileCoopGT not registered in mmengine.registry.TRANSFORMS")
     
     dataset = build_dataset(dataset_cfg)
 
@@ -166,7 +179,8 @@ def create_groundtruth_database(
 
     for j in track_iter_progress(list(range(len(dataset)))):
         input_dict = dataset.get_data_info(j)
-        dataset.pre_pipeline(input_dict)
+        # pre_pipeline is no longer needed in new mmengine/mmdet3d - pipeline handles it internally
+        # dataset.pre_pipeline(input_dict)  # Removed for new API compatibility
         example = dataset.pipeline(input_dict)
         annos = example["ann_info"]
         points = None
