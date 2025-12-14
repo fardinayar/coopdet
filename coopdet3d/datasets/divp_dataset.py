@@ -293,7 +293,7 @@ class DIVPNuscDataset(Det3DDataset):
             infrastructure_sweeps=info["infrastructure_sweeps"],
             registered_lidar_path=info["registered_lidar_path"],
             registered_sweeps=info["registered_sweeps"],
-            vehicle2infrastructure = info["vehicle2infrastructure"],
+            vehicle2infrastructure = np.asarray(info["vehicle2infrastructure"], dtype=np.float32),
         )
 
         if self.modality["use_camera"]:
@@ -312,39 +312,51 @@ class DIVPNuscDataset(Det3DDataset):
                 data["vehicle_image_paths"].append(vehicle_camera_info["data_path"])
 
                 # lidar to camera transform
-                vehicle_camera2lidar = vehicle_camera_info["sensor2lidar"]
+                vehicle_camera2lidar = np.asarray(vehicle_camera_info["sensor2lidar"], dtype=np.float32)
                 vehicle_camera2lidar = np.vstack([vehicle_camera2lidar, [0.0, 0.0, 0.0, 1.0]])
                 vehicle_lidar2camera = np.linalg.inv(vehicle_camera2lidar)
                 vehicle_lidar2camera = vehicle_lidar2camera[:-1, :]
                 data["vehicle_lidar2camera"].append(vehicle_lidar2camera)
 
                 # camera intrinsics
-                data["vehicle_camera_intrinsics"].append(vehicle_camera_info["camera_intrinsics"])
+                data["vehicle_camera_intrinsics"].append(
+                    np.asarray(vehicle_camera_info["camera_intrinsics"], dtype=np.float32)
+                )
 
                 # lidar to image transform
-                data["vehicle_lidar2image"].append(vehicle_camera_info["lidar2image"])
+                data["vehicle_lidar2image"].append(
+                    np.asarray(vehicle_camera_info["lidar2image"], dtype=np.float32)
+                )
 
                 # camera to lidar transform
-                data["vehicle_camera2lidar"].append(vehicle_camera_info["sensor2lidar"])
+                data["vehicle_camera2lidar"].append(
+                    np.asarray(vehicle_camera_info["sensor2lidar"], dtype=np.float32)
+                )
             
             for _, infrastructure_camera_info in info["infrastructure_cams"].items():
                 data["infrastructure_image_paths"].append(infrastructure_camera_info["data_path"])
 
                 # lidar to camera transform
-                infrastructure_camera2lidar = infrastructure_camera_info["sensor2lidar"]
+                infrastructure_camera2lidar = np.asarray(infrastructure_camera_info["sensor2lidar"], dtype=np.float32)
                 infrastructure_camera2lidar = np.vstack([infrastructure_camera2lidar, [0.0, 0.0, 0.0, 1.0]])
                 infrastructure_lidar2camera = np.linalg.inv(infrastructure_camera2lidar)
                 infrastructure_lidar2camera = infrastructure_lidar2camera[:-1, :]
                 data["infrastructure_lidar2camera"].append(infrastructure_lidar2camera)
 
                 # camera intrinsics
-                data["infrastructure_camera_intrinsics"].append(infrastructure_camera_info["camera_intrinsics"])
+                data["infrastructure_camera_intrinsics"].append(
+                    np.asarray(infrastructure_camera_info["camera_intrinsics"], dtype=np.float32)
+                )
 
                 # lidar to image transform
-                data["infrastructure_lidar2image"].append(infrastructure_camera_info["lidar2image"])
+                data["infrastructure_lidar2image"].append(
+                    np.asarray(infrastructure_camera_info["lidar2image"], dtype=np.float32)
+                )
 
                 # camera to lidar transform
-                data["infrastructure_camera2lidar"].append(infrastructure_camera_info["sensor2lidar"])
+                data["infrastructure_camera2lidar"].append(
+                    np.asarray(infrastructure_camera_info["sensor2lidar"], dtype=np.float32)
+                )
 
         if self.test_mode:
             annos = None
