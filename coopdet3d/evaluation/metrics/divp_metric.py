@@ -62,7 +62,7 @@ class DIVPMetric(BaseMetric):
         format_only (bool): Only format results without evaluation. Default: False.
         jsonfile_prefix (str, optional): Prefix for output JSON files.
         result_names (List[str]): Result names. Default: ['pts_bbox'].
-        dataset_type (str, optional): Dataset type ('TUMTrafV2XNuscDataset' or 'TUMTrafNuscDataset').
+        dataset_type (str, optional): Dataset type ('DIVPNuscDataset').
         collect_device (str): Device for collecting results ('cpu' or 'gpu'). Default: 'cpu'.
         backend_args (dict, optional): Backend arguments.
     """
@@ -521,7 +521,7 @@ class DIVPMetric(BaseMetric):
 
         if verbose:
             print('\n' + '='*70)
-            print('TUMTraf NuScenes-style Evaluation (Center Distance Matching)')
+            print('DIVP NuScenes-style Evaluation (Center Distance Matching)')
             print('='*70)
 
         # Load data
@@ -650,7 +650,7 @@ class DIVPMetric(BaseMetric):
 
         if verbose:
             print('\n' + '='*70)
-            print('TUMTraf KITTI-style Evaluation (IoU-based)')
+            print('DIVP KITTI-style Evaluation (IoU-based)')
             print('='*70)
 
         # Load data
