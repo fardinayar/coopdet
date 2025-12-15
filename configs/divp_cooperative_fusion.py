@@ -4,7 +4,7 @@
 _base_ = [
     '_base_/datasets/divp.py',
     '_base_/runtime/mmengine_default.py',
-    '_base_/models/cooperative_transfusion.py',
+    '_base_/models/divp_cooperative_transfusion.py',
 ]
 
 # Point cloud configuration (512x512 BEV grid)
@@ -198,8 +198,8 @@ model = dict(
 # Evaluation configuration
 val_evaluator = dict(
     type='DIVPMetric',
-    data_root='data/divp_dataset_processed/',
-    ann_file='divp_v2x_nusc_infos_val.pkl',
+    data_root='data/divp_dataset_converted_processed/',
+    ann_file='divp_nusc_infos_val.pkl',
     metric='bbox',
     modality=dict(use_camera=True, use_lidar=True),
     result_names=['pts_bbox'],

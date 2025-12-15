@@ -1,6 +1,6 @@
 # Dataset configuration for DIVP Dataset
 dataset_type = 'DIVPNuscDataset'
-dataset_root = 'data/divp_dataset_processed/'
+dataset_root = 'data/divp_dataset_converted_processed/'
 gt_paste_stop_epoch = -1
 reduce_beams = 32
 load_dim = 5
@@ -320,7 +320,7 @@ test_pipeline = [
             'vehicle2infrastructure'])]
 
 data = dict(
-    samples_per_gpu=16,
+    samples_per_gpu=1, # The number of cameras is different for each scenario, so we currently need to set it to 1
     workers_per_gpu=4,
     train=dict(
         type='CBGSDataset',
@@ -342,7 +342,8 @@ data = dict(
         object_classes=object_classes,
         modality=input_modality,
         test_mode=False,
-        box_type_3d='LiDAR'),
+        box_type_3d='LiDAR',
+        filter_empty_gt=False),
     test=dict(
         type=dataset_type,
         data_root=dataset_root,
