@@ -346,7 +346,7 @@ class DIVP2NuScenes(object):
 
                 yaw = np.asarray(rot_temp[2], dtype=np.float32)
 
-                gt_box = np.concatenate([loc, dim, -yaw], axis=None)
+                gt_box = np.concatenate([loc, dim, yaw], axis=None)
 
                 gt_boxes.append(gt_box)
                 gt_names.append(object_data['type'])

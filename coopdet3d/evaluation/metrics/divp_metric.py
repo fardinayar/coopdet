@@ -374,7 +374,7 @@ class DIVPMetric(BaseMetric):
                 rot_euler = rot_obj.as_euler('zyx', degrees=False)
                 # IMPORTANT: Negate yaw to match the convention used in training data (pkl file)
                 # The quaternion in JSON uses opposite rotation direction vs pkl GT boxes
-                yaw = -float(rot_euler[0])  # First element is z-axis rotation, negated for convention match
+                yaw = float(rot_euler[0])  # First element is z-axis rotation, negated for convention match
 
                 # Extract LiDAR points count
                 num_lidar_pts = 0
