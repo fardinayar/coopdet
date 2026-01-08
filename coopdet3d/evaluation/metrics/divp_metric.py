@@ -71,20 +71,7 @@ class DIVPMetric(BaseMetric):
     # Class-level configuration
     # =========================================================================
 
-    CLASSES = (
-        'TYPE_PEDESTRIAN',
-        'TYPE_BICYCLE',
-        'TYPE_OTHER',
-        'TYPE_SMALL_CAR',
-        'TYPE_HEAVY_TRUCK',
-        'TYPE_MOTORBIKE',
-        'TYPE_MEDIUM_CAR',
-        'TYPE_BUS',
-        'TYPE_COMPACT_CAR',
-        'TYPE_SEMITRACTOR',
-        'TYPE_SEMITRAILER',
-        'TYPE_LUXURY_CAR'
-    )
+    CLASSES = ('CAR', 'TRAILER', 'TRUCK', 'VAN', 'PEDESTRIAN', 'BUS', 'BICYCLE')
 
     ErrNameMapping = {
         'trans_err': 'mATE',
@@ -95,18 +82,8 @@ class DIVPMetric(BaseMetric):
 
     # Detection range per class (meters)
     cls_range = {
-        "TYPE_PEDESTRIAN": 40,
-        "TYPE_BICYCLE": 40,
-        "TYPE_OTHER": 30,
-        "TYPE_SMALL_CAR": 50,
-        "TYPE_HEAVY_TRUCK": 50,
-        "TYPE_MOTORBIKE": 40,
-        "TYPE_MEDIUM_CAR": 50,
-        "TYPE_BUS": 50,
-        "TYPE_COMPACT_CAR": 50,
-        "TYPE_SEMITRACTOR": 50,
-        "TYPE_SEMITRAILER": 50,
-        "TYPE_LUXURY_CAR": 50,
+        "CAR": 50, "TRUCK": 50, "BUS": 50, "TRAILER": 50, "VAN": 50,
+        "PEDESTRIAN": 40, "BICYCLE": 40,
     }
 
     # NuScenes-style center distance evaluation config

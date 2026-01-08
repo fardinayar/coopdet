@@ -39,20 +39,7 @@ class _SerializedDataProxy:
 @DATASETS.register_module()
 class DIVPNuscDataset(Det3DDataset):
     METAINFO = {
-        'classes': (
-            'TYPE_PEDESTRIAN',
-            'TYPE_BICYCLE',
-            'TYPE_OTHER',
-            'TYPE_SMALL_CAR',
-            'TYPE_HEAVY_TRUCK',
-            'TYPE_MOTORBIKE',
-            'TYPE_MEDIUM_CAR',
-            'TYPE_BUS',
-            'TYPE_COMPACT_CAR',
-            'TYPE_SEMITRACTOR',
-            'TYPE_SEMITRAILER',
-            'TYPE_LUXURY_CAR'
-        )
+        'classes': ('CAR', 'TRAILER', 'TRUCK', 'VAN', 'PEDESTRIAN', 'BUS', 'BICYCLE')
     }
 
     # https://github.com/nutonomy/nuscenes-devkit/blob/57889ff20678577025326cfc24e57424a829be0a/python-sdk/nuscenes/eval/detection/evaluate.py#L222 # noqa
@@ -65,18 +52,13 @@ class DIVPNuscDataset(Det3DDataset):
 
     # Modified from the originally used configs of BEVFusion https://github.com/nutonomy/nuscenes-devkit/blob/master/python-sdk/nuscenes/eval/detection/configs/detection_cvpr_2019.json
     cls_range = {
-        "TYPE_PEDESTRIAN": 40,
-        "TYPE_BICYCLE": 40,
-        "TYPE_OTHER": 30,
-        "TYPE_SMALL_CAR": 50,
-        "TYPE_HEAVY_TRUCK": 50,
-        "TYPE_MOTORBIKE": 40,
-        "TYPE_MEDIUM_CAR": 50,
-        "TYPE_BUS": 50,
-        "TYPE_COMPACT_CAR": 50,
-        "TYPE_SEMITRACTOR": 50,
-        "TYPE_SEMITRAILER": 50,
-        "TYPE_LUXURY_CAR": 50,
+        "CAR": 50,
+        "TRUCK": 50,
+        "BUS": 50,
+        "TRAILER": 50,
+        "VAN": 50,
+        "PEDESTRIAN": 40,
+        "BICYCLE": 40,
     }
     # Center distance-based evaluation (NuScenes style)
     dist_fcn = "center_distance"
