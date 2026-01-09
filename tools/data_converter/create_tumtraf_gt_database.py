@@ -106,7 +106,7 @@ def create_groundtruth_database(
                     ),
                 ],
             )
-    elif dataset_class_name == "TUMTrafV2XNuscDataset":
+    elif dataset_class_name == "TUMTrafV2XNuscDataset" or dataset_class_name == "DIVPNuscDataset":
         if not load_augmented:
             dataset_cfg.update(
                 use_valid_flag=True,
@@ -187,7 +187,7 @@ def create_groundtruth_database(
         if dataset_class_name == "TUMTrafNuscDataset":
             # use this for infrastructure only perception
             points = example["points"].tensor.numpy()
-        elif dataset_class_name == "TUMTrafV2XNuscDataset":
+        elif dataset_class_name == "TUMTrafV2XNuscDataset" or dataset_class_name == "DIVPNuscDataset":
             # use this for cooperative infrastructure+vehicle perception
             points = example["registered_points"].tensor.numpy()
         gt_boxes_3d = annos["gt_bboxes_3d"].tensor.numpy()
@@ -207,7 +207,7 @@ def create_groundtruth_database(
         if dataset_class_name == "TUMTrafNuscDataset":
             # use this for infrastructure only perception
             temp_name = os.path.basename(example["lidar_path"])
-        elif dataset_class_name == "TUMTrafV2XNuscDataset":
+        elif dataset_class_name == "TUMTrafV2XNuscDataset" or dataset_class_name == "DIVPNuscDataset":
             # use this for cooperative infrastructure+vehicle perception
             temp_name = os.path.basename(example["registered_lidar_path"])
         temp_name = temp_name.split("_")
