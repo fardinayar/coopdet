@@ -374,7 +374,7 @@ class CoopBaseTransform(nn.Module):
         raise NotImplementedError
 
     
-    def bev_pool(self, geom_feats, x):
+    def bev_pool(self, geom_feats, x, metas=None):
         B, N, D, H, W, C = x.shape
         Nprime = B * N * D * H * W
 
@@ -402,7 +402,20 @@ class CoopBaseTransform(nn.Module):
                 & (geom_feats[:, 2] < self.nx[2])
         )
         x = x[kept]
+        geom_feats_origninal = geom_feats.clone()
         geom_feats = geom_feats[kept]
+
+        if len(x) == 0:
+            print(f"WARNING: All points filtered out! B={B}, N={N}, kept={kept.sum().item()}/{len(kept)}")
+            print("bev_pool x shape", x.shape)
+            import traceback
+            frame_info = traceback.extract_stack()[-3]
+            print("bev_pool frame info", frame_info.filename, frame_info.lineno, frame_info.name)
+            print("metas", metas)
+            print(f"  geom_feats range: x=[{geom_feats_origninal[:, 0].min().item() if len(geom_feats_origninal) > 0 else 'N/A'}, {geom_feats_origninal[:, 0].max().item() if len(geom_feats_origninal) > 0 else 'N/A'}], "
+                f"y=[{geom_feats_origninal[:, 1].min().item() if len(geom_feats_origninal) > 0 else 'N/A'}, {geom_feats_origninal[:, 1].max().item() if len(geom_feats_origninal) > 0 else 'N/A'}], "
+                f"z=[{geom_feats_origninal[:, 2].min().item() if len(geom_feats_origninal) > 0 else 'N/A'}, {geom_feats_origninal[:, 2].max().item() if len(geom_feats_origninal) > 0 else 'N/A'}]")
+            print(f"  BEV grid bounds: nx={self.nx}, bx={self.bx}, dx={self.dx}")
 
         x = bev_pool(x, geom_feats, B, self.nx[2], self.nx[0], self.nx[1])
 
@@ -798,5 +811,5 @@ class CoopBaseDepthTransform(CoopBaseTransform):
         )
 
         x = self.get_cam_feats(img, depth)
-        x = self.bev_pool(geom, x)
+        x = self.bev_pool(geom, x, metas)
         return x

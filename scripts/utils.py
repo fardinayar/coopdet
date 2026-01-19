@@ -3,8 +3,8 @@ import uuid
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-IMAGE_WIDTH = 1920
-IMAGE_HEIGHT = 1200
+IMAGE_WIDTH = 1158
+IMAGE_HEIGHT = 750
 
 id_to_class_name_mapping = {
     "0": {

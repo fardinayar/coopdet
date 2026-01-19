@@ -9,6 +9,10 @@ from torchpack import distributed as dist
 from mmengine import Config
 from mmengine.runner import load_checkpoint
 # mmcv.cnn still exists in mmcv2, fuse_conv_bn is there
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 try:
     from mmcv.cnn import fuse_conv_bn
 except ImportError:
@@ -53,7 +57,7 @@ except ImportError:
                 k, v = kv.split('=', maxsplit=1)
                 d[k] = v
             setattr(namespace, self.dest, d)
-from mmdet3d.apis import single_gpu_test
+from coopdet3d.apis import single_gpu_test
 from coopdet3d.datasets import build_dataloader, build_dataset
 from coopdet3d.models import build_coop_model
 from mmdet.apis import multi_gpu_test, set_random_seed

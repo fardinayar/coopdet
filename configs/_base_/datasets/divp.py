@@ -1,18 +1,21 @@
 # Dataset configuration for DIVP Dataset
 dataset_type = 'DIVPNuscDataset'
-dataset_root = 'data/divp_dataset_converted_processed/'
+dataset_root = '../data/divp_dataset_processed_type_mapped/'
 gt_paste_stop_epoch = -1
 reduce_beams = 32
 load_dim = 5
 use_dim = 5
 load_augmented = None
 
-point_cloud_range = [-75.0, -75.0, -8, 75.0, 75.0, 0]
-voxel_size = [0.293, 0.293, 4]  # Matching pointpillars 512x512 grid
-image_size = [256, 704]
+# point_cloud_range = [-75.0, -75.0, -8, 75.0, 75.0, 0]
+# voxel_size = [0.293, 0.293, 4]  # Matching pointpillars 512x512 grid
+# image_size = [256, 704]
+point_cloud_range = [-225.0, -225.0, -8.0, 225.0, 225.0, 0.0]
+voxel_size = [0.879, 0.879, 4]  # Matching pointpillars 1024x1024 grid
+image_size = [240, 640]
 
 augment2d = dict(
-    resize=[[0.38, 0.55], [0.48, 0.48]],
+    resize=[[0.7, 0.95], [0.48, 0.48]], # original size of the image is 1158x750
     rotate=[-5.4, 5.4],
     gridmask=dict(
         prob=0.0,

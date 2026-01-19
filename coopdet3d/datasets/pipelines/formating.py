@@ -5,12 +5,17 @@ import torch
 from mmcv.transforms import to_tensor
 from mmengine.structures import InstanceData
 
-from mmdet3d.registry import TRANSFORMS
+from mmdet3d.registry import TRANSFORMS as MMDet3D_TRANSFORMS
+from mmengine.registry import TRANSFORMS as MMEngine_TRANSFORMS
+
+# Use mmdet3d's TRANSFORMS registry as primary
+TRANSFORMS = MMDet3D_TRANSFORMS
 from mmdet3d.structures import BaseInstance3DBoxes, Det3DDataSample
 from mmdet3d.structures.points import BasePoints
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class DefaultFormatBundle3DCoop:
     """Default formatting bundle for cooperative 3D detection.
 
@@ -124,6 +129,7 @@ class DefaultFormatBundle3DCoop:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class Collect3DCoop:
     """Collect keys for cooperative 3D detection.
 
@@ -236,6 +242,19 @@ class Collect3DCoop:
         packed_results['data_samples'] = data_sample
         return packed_results
 
+
+# Register all custom transforms in mmengine registry for compatibility with mmengine's Compose
+_custom_formating_transforms = [
+    ('DefaultFormatBundle3DCoop', DefaultFormatBundle3DCoop),
+    ('Collect3DCoop', Collect3DCoop),
+]
+
+for name, transform_class in _custom_formating_transforms:
+    try:
+        MMEngine_TRANSFORMS.register_module(name=name, module=transform_class, force=False)
+    except (KeyError, ValueError):
+        # Already registered or registration failed, that's okay
+        pass
 
 __all__ = [
     'DefaultFormatBundle3DCoop',

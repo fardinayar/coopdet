@@ -47,6 +47,7 @@ def output_to_box_dict(detection):
     labels = detection["labels_3d"].numpy()
 
     box_gravity_center = box3d.gravity_center.numpy()
+    # box_bottom_center = box3d.tensor[:, :3].numpy()
     box_dims = box3d.dims.numpy()
     box_yaw = box3d.yaw.numpy()
 
@@ -55,6 +56,7 @@ def output_to_box_dict(detection):
         velocity = (*box3d.tensor[i, 7:9], 0.0)
         box = {
             "center": np.array(box_gravity_center[i]),
+            # "center": np.array(box_bottom_center[i]),
             "wlh": np.array(box_dims[i]),
             "orientation": box_yaw[i],
             "label": int(labels[i]) if not np.isnan(labels[i]) else labels[i],

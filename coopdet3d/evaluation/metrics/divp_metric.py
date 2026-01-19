@@ -18,6 +18,7 @@ References:
 - http://www.cvlibs.net/datasets/kitti/eval_object.php
 """
 
+import copy
 import json
 import os
 import tempfile
@@ -278,6 +279,8 @@ class DIVPMetric(BaseMetric):
             }
             boxes = filter_box_in_lidar_cs(boxes, mapped_class_names, eval_configs)
 
+            # SCORE_THRESHOLD = 0.3
+            # boxes = [box for box in boxes if box["score"] >= SCORE_THRESHOLD]
             for box in boxes:
                 name = mapped_class_names[box["label"]]
                 nusc_anno = dict(
@@ -346,6 +349,7 @@ class DIVPMetric(BaseMetric):
                 dim = np.array(object_data['cuboid']['val'][7:], dtype=np.float32)
                 rot = np.array(object_data['cuboid']['val'][3:7], dtype=np.float32)  # quaternion [x,y,z,w]
 
+                # loc[2] += dim[2] / 2.0
                 # Convert quaternion to yaw (z-axis rotation)
                 rot_obj = Rotation.from_quat(rot)
                 rot_euler = rot_obj.as_euler('zyx', degrees=False)
@@ -484,7 +488,7 @@ class DIVPMetric(BaseMetric):
     ) -> dict:
         """Run NuScenes-style evaluation with center distance matching.
 
-        Computes: mAP, mATE, mASE, mAOE, mAVE, NDS.
+        Computes: mAP, mATE, mASE, mAOE, mAVE, NDS (both class-aware and class-ignoring).
 
         Args:
             result_path: Path to predictions JSON.
@@ -516,29 +520,27 @@ class DIVPMetric(BaseMetric):
 
         start_time = time.time()
 
-        # Accumulate metrics for each class and distance threshold
+        # ===== クラスを区別する評価 =====
         class_aps = {cls: [] for cls in self.CLASSES}
         class_tps = {cls: {metric: [] for metric in self.ErrNameMapping.keys()} for cls in self.CLASSES}
 
         for class_name in self.CLASSES:
             for dist_th in self.dist_ths:
                 md = accumulate_center_distance(
-                    gt_boxes, pred_boxes, class_name, dist_th, verbose=False
+                    gt_boxes, pred_boxes, class_name, dist_th, verbose=False, ignore_class=False
                 )
                 ap = calc_ap(md, self.min_recall, self.min_precision)
                 class_aps[class_name].append(ap)
 
             # TP errors at dist_th_tp
             md_tp = accumulate_center_distance(
-                gt_boxes, pred_boxes, class_name, self.dist_th_tp, verbose=False
+                gt_boxes, pred_boxes, class_name, self.dist_th_tp, verbose=False, ignore_class=False
             )
             for metric in self.ErrNameMapping.keys():
                 tp_err = calc_tp_errors(md_tp, self.min_recall, metric)
                 class_tps[class_name][metric].append(tp_err)
 
-        eval_time = time.time() - start_time
-
-        # Compute mean metrics
+        # Compute mean metrics (class-aware)
         mean_aps = {cls: float(np.mean(aps)) for cls, aps in class_aps.items()}
         mean_ap = float(np.mean(list(mean_aps.values())))
 
@@ -547,20 +549,68 @@ class DIVPMetric(BaseMetric):
             cls_errors = [class_tps[cls][metric][0] for cls in self.CLASSES]
             tp_errors[metric] = float(np.mean(cls_errors))
 
-        # Compute NDS (NuScenes Detection Score)
+        # Compute NDS (class-aware)
         tp_scores = [1 - tp_errors[metric] for metric in self.ErrNameMapping.keys()]
         nds = (self.mean_ap_weight * mean_ap + sum(tp_scores)) / (self.mean_ap_weight + len(tp_scores))
 
+        # ===== クラスを無視する評価 =====
+        # ディープコピーを作成してクラス名を統一
+        gt_boxes_ignoring = copy.deepcopy(gt_boxes)
+        pred_boxes_ignoring = copy.deepcopy(pred_boxes)
+        
+        # すべてのクラス名を"ANY"に統一
+        for timestamp in gt_boxes_ignoring:
+            for box in gt_boxes_ignoring[timestamp]:
+                box["detection_name"] = "ANY"
+        
+        for timestamp in pred_boxes_ignoring:
+            for box in pred_boxes_ignoring[timestamp]:
+                box["detection_name"] = "ANY"
+        
+        class_ignoring_aps = []
+        class_ignoring_tps = {metric: [] for metric in self.ErrNameMapping.keys()}
+
+        for dist_th in self.dist_ths:
+            md = accumulate_center_distance(
+                gt_boxes_ignoring, pred_boxes_ignoring, "ANY", dist_th, verbose=False, ignore_class=False
+            )
+            ap = calc_ap(md, self.min_recall, self.min_precision)
+            class_ignoring_aps.append(ap)
+
+        # TP errors at dist_th_tp (class-ignoring)
+        md_tp_ignoring = accumulate_center_distance(
+            gt_boxes_ignoring, pred_boxes_ignoring, "ANY", self.dist_th_tp, verbose=False, ignore_class=False
+        )
+        for metric in self.ErrNameMapping.keys():
+            tp_err = calc_tp_errors(md_tp_ignoring, self.min_recall, metric)
+            class_ignoring_tps[metric] = tp_err
+
+        # Compute mean metrics (class-ignoring)
+        mean_ap_ignoring = float(np.mean(class_ignoring_aps))
+        tp_errors_ignoring = {metric: float(class_ignoring_tps[metric]) for metric in self.ErrNameMapping.keys()}
+
+        # Compute NDS (class-ignoring)
+        tp_scores_ignoring = [1 - tp_errors_ignoring[metric] for metric in self.ErrNameMapping.keys()]
+        nds_ignoring = (self.mean_ap_weight * mean_ap_ignoring + sum(tp_scores_ignoring)) / (self.mean_ap_weight + len(tp_scores_ignoring))
+
+        eval_time = time.time() - start_time
+
         # Prepare results
         metrics_summary = {
+            # Class-aware metrics
             'mAP': mean_ap,
             'NDS': float(nds),
+            # Class-ignoring metrics
+            'mAP_class_ignoring': mean_ap_ignoring,
+            'NDS_class_ignoring': float(nds_ignoring),
             'eval_time': eval_time,
         }
 
-        # Add TP errors with mapped names
+        # Add TP errors with mapped names (class-aware)
         for metric, mapped_name in self.ErrNameMapping.items():
             metrics_summary[mapped_name] = tp_errors[metric]
+            # Class-ignoring TP errors
+            metrics_summary[f'{mapped_name}_class_ignoring'] = tp_errors_ignoring[metric]
 
         # Add per-class mAP
         for cls in self.CLASSES:
@@ -571,6 +621,8 @@ class DIVPMetric(BaseMetric):
             metrics_summary['meta'] = meta
             metrics_summary['class_aps'] = class_aps
             metrics_summary['class_tps'] = class_tps
+            metrics_summary['class_ignoring_aps'] = class_ignoring_aps
+            metrics_summary['class_ignoring_tps'] = class_ignoring_tps
             with open(osp.join(output_dir, 'metrics_summary_nusc.json'), 'w') as f:
                 # Convert numpy to native types
                 def convert(obj):
@@ -589,11 +641,17 @@ class DIVPMetric(BaseMetric):
             print('\n' + '='*70)
             print('NuScenes-style Results')
             print('='*70)
-            print(f'mAP:  {mean_ap:.4f}')
-            print(f'NDS:  {nds:.4f}')
+            print('Class-aware metrics:')
+            print(f'  mAP:  {mean_ap:.4f}')
+            print(f'  NDS:  {nds:.4f}')
             for metric, mapped_name in self.ErrNameMapping.items():
-                print(f'{mapped_name}: {tp_errors[metric]:.4f}')
-            print(f'Eval time: {eval_time:.1f}s')
+                print(f'  {mapped_name}: {tp_errors[metric]:.4f}')
+            print('\nClass-ignoring metrics:')
+            print(f'  mAP:  {mean_ap_ignoring:.4f}')
+            print(f'  NDS:  {nds_ignoring:.4f}')
+            for metric, mapped_name in self.ErrNameMapping.items():
+                print(f'  {mapped_name}: {tp_errors_ignoring[metric]:.4f}')
+            print(f'\nEval time: {eval_time:.1f}s')
             print('\nPer-class mAP:')
             for cls in self.CLASSES:
                 print(f'  {cls:<15} {mean_aps[cls]:.4f}')
@@ -613,7 +671,7 @@ class DIVPMetric(BaseMetric):
     ) -> dict:
         """Run KITTI-style evaluation with IoU matching.
 
-        Computes: BEV mAP, 3D mAP (with difficulty levels).
+        Computes: BEV mAP, 3D mAP (both class-aware and class-ignoring).
 
         Args:
             result_path: Path to predictions JSON.
@@ -645,6 +703,7 @@ class DIVPMetric(BaseMetric):
 
         start_time = time.time()
 
+        # ===== クラスを区別する評価 =====
         # Compute BEV mAP
         if verbose:
             print('\nComputing BEV mAP...')
@@ -654,7 +713,7 @@ class DIVPMetric(BaseMetric):
             for iou_th in self.bev_iou_ths:
                 md = accumulate_iou(
                     gt_boxes, pred_boxes, class_name, iou_th,
-                    iou_type='bev', difficulty='all', verbose=False
+                    iou_type='bev', difficulty='all', verbose=False, ignore_class=False
                 )
                 ap = calc_ap(md, self.min_recall, self.min_precision)
                 class_aps.append(ap)
@@ -669,24 +728,68 @@ class DIVPMetric(BaseMetric):
             for iou_th in self.iou_3d_ths:
                 md = accumulate_iou(
                     gt_boxes, pred_boxes, class_name, iou_th,
-                    iou_type='3d', difficulty='all', verbose=False
+                    iou_type='3d', difficulty='all', verbose=False, ignore_class=False
                 )
                 ap = calc_ap(md, self.min_recall, self.min_precision)
                 class_aps.append(ap)
             iou_3d_aps[class_name] = class_aps
 
-        eval_time = time.time() - start_time
-
-        # Compute mean APs
+        # Compute mean APs (class-aware)
         mean_bev_aps = {cls: float(np.mean(aps)) for cls, aps in bev_aps.items()}
         mean_3d_aps = {cls: float(np.mean(aps)) for cls, aps in iou_3d_aps.items()}
         overall_bev_map = float(np.mean(list(mean_bev_aps.values())))
         overall_3d_map = float(np.mean(list(mean_3d_aps.values())))
 
+        # ===== クラスを無視する評価 =====
+        # ディープコピーを作成してクラス名を統一
+        gt_boxes_ignoring = copy.deepcopy(gt_boxes)
+        pred_boxes_ignoring = copy.deepcopy(pred_boxes)
+        
+        # すべてのクラス名を"ANY"に統一
+        for timestamp in gt_boxes_ignoring:
+            for box in gt_boxes_ignoring[timestamp]:
+                box["detection_name"] = "ANY"
+        
+        for timestamp in pred_boxes_ignoring:
+            for box in pred_boxes_ignoring[timestamp]:
+                box["detection_name"] = "ANY"
+        
+        # Compute BEV mAP (class-ignoring)
+        if verbose:
+            print('\nComputing BEV mAP (class-ignoring)...')
+        bev_aps_ignoring = []
+        for iou_th in self.bev_iou_ths:
+            md = accumulate_iou(
+                gt_boxes_ignoring, pred_boxes_ignoring, "ANY", iou_th,
+                iou_type='bev', difficulty='all', verbose=False, ignore_class=False
+            )
+            ap = calc_ap(md, self.min_recall, self.min_precision)
+            bev_aps_ignoring.append(ap)
+        overall_bev_map_ignoring = float(np.mean(bev_aps_ignoring))
+
+        # Compute 3D mAP (class-ignoring)
+        if verbose:
+            print('Computing 3D mAP (class-ignoring)...')
+        iou_3d_aps_ignoring = []
+        for iou_th in self.iou_3d_ths:
+            md = accumulate_iou(
+                gt_boxes_ignoring, pred_boxes_ignoring, "ANY", iou_th,
+                iou_type='3d', difficulty='all', verbose=False, ignore_class=False
+            )
+            ap = calc_ap(md, self.min_recall, self.min_precision)
+            iou_3d_aps_ignoring.append(ap)
+        overall_3d_map_ignoring = float(np.mean(iou_3d_aps_ignoring))
+
+        eval_time = time.time() - start_time
+
         # Prepare results
         metrics_summary = {
+            # Class-aware metrics
             'BEV_mAP': overall_bev_map,
             '3D_mAP': overall_3d_map,
+            # Class-ignoring metrics
+            'BEV_mAP_class_ignoring': overall_bev_map_ignoring,
+            '3D_mAP_class_ignoring': overall_3d_map_ignoring,
             'eval_time': eval_time,
         }
 
@@ -700,6 +803,8 @@ class DIVPMetric(BaseMetric):
             metrics_summary['meta'] = meta
             metrics_summary['bev_aps'] = bev_aps
             metrics_summary['iou_3d_aps'] = iou_3d_aps
+            metrics_summary['bev_aps_ignoring'] = bev_aps_ignoring
+            metrics_summary['iou_3d_aps_ignoring'] = iou_3d_aps_ignoring
             metrics_summary['bev_iou_thresholds'] = self.bev_iou_ths
             metrics_summary['iou_3d_thresholds'] = self.iou_3d_ths
             with open(osp.join(output_dir, 'metrics_summary_kitti.json'), 'w') as f:
@@ -719,9 +824,13 @@ class DIVPMetric(BaseMetric):
             print('\n' + '='*70)
             print('KITTI-style Results')
             print('='*70)
-            print(f'BEV mAP: {overall_bev_map:.4f}')
-            print(f'3D mAP:  {overall_3d_map:.4f}')
-            print(f'Eval time: {eval_time:.1f}s')
+            print('Class-aware metrics:')
+            print(f'  BEV mAP: {overall_bev_map:.4f}')
+            print(f'  3D mAP:  {overall_3d_map:.4f}')
+            print('\nClass-ignoring metrics:')
+            print(f'  BEV mAP: {overall_bev_map_ignoring:.4f}')
+            print(f'  3D mAP:  {overall_3d_map_ignoring:.4f}')
+            print(f'\nEval time: {eval_time:.1f}s')
             print('\nPer-class BEV mAP:')
             for cls in self.CLASSES:
                 print(f'  {cls:<15} {mean_bev_aps[cls]:.4f}')

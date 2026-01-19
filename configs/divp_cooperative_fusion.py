@@ -8,8 +8,10 @@ _base_ = [
 ]
 
 # Point cloud configuration (512x512 BEV grid)
-voxel_size = [0.293, 0.293, 4]  # Original CoopDet3D uses 4, not 8
-point_cloud_range = [-75.0, -75.0, -8.0, 75.0, 75.0, 0.0]
+# voxel_size = [0.293, 0.293, 4]  # Original CoopDet3D uses 4, not 8
+# point_cloud_range = [-75.0, -75.0, -8.0, 75.0, 75.0, 0.0]
+voxel_size = [0.879, 0.879, 4]
+point_cloud_range = [-225.0, -225.0, -8.0, 225.0, 225.0, 0.0]
 
 # Model configuration - Camera + LiDAR fusion
 model = dict(
@@ -40,10 +42,14 @@ model = dict(
                         type='CoopDepthLSSTransform',
                         in_channels=256,
                         out_channels=80,
-                        image_size=[256, 704],
-                        feature_size=[32, 88],
-                        xbound=[-75.0, 75.0, 0.146484375],
-                        ybound=[-75.0, 75.0, 0.146484375],
+                        # image_size=[256, 704],
+                        image_size = [240, 640],
+                        # feature_size=[32, 88],
+                        feature_size=[30, 80],
+                        # xbound=[-75.0, 75.0, 0.146484375],
+                        # ybound=[-75.0, 75.0, 0.146484375],
+                        xbound=[-225.0, 225.0, 0.439453125],
+                        ybound=[-225.0, 225.0, 0.439453125],
                         zbound=[-10.0, 10.0, 20.0],
                         dbound=[1.0, 60.0, 0.5],
                         downsample=2,
@@ -103,10 +109,14 @@ model = dict(
                         type='CoopDepthLSSTransform',
                         in_channels=256,
                         out_channels=80,
-                        image_size=[256, 704],
-                        feature_size=[32, 88],
-                        xbound=[-75.0, 75.0, 0.146484375],
-                        ybound=[-75.0, 75.0, 0.146484375],
+                        # image_size=[256, 704],
+                        image_size = [240, 640],
+                        # feature_size=[32, 88],
+                        feature_size=[30, 80],
+                        # xbound=[-75.0, 75.0, 0.146484375],
+                        # ybound=[-75.0, 75.0, 0.146484375],
+                        xbound=[-225.0, 225.0, 0.439453125],
+                        ybound=[-225.0, 225.0, 0.439453125],
                         zbound=[-10.0, 10.0, 20.0],
                         dbound=[1.0, 60.0, 0.5],
                         downsample=2,
@@ -198,7 +208,7 @@ model = dict(
 # Evaluation configuration
 val_evaluator = dict(
     type='DIVPMetric',
-    data_root='data/divp_dataset_converted_processed/',
+    data_root='../data/divp_dataset_processed_type_mapped/',
     ann_file='divp_nusc_infos_val.pkl',
     metric='bbox',
     modality=dict(use_camera=True, use_lidar=True),
@@ -210,8 +220,9 @@ test_evaluator = val_evaluator
 custom_hooks = [
     dict(
         type='GLBVisualizationHook',
-        out_dir='work_dirs/visualizations',
+        out_dir='work_dirs/visualizations/divp_box_center_gravity_center',
         interval=1,  # Save every epoch
-        num_samples=5,  # Visualize 5 samples per epoch
+        frame_interval=10,  # Visualize every 10 frames (overrides num_samples)
+        num_samples=5,  # Used only if frame_interval is None
         score_thr=0.3)  # Only show predictions with score > 0.3
 ]

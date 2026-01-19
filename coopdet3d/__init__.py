@@ -5,6 +5,7 @@ from . import datasets
 from . import evaluation
 from . import models
 from . import engine
+from . import apis
 
-__all__ = ['datasets', 'evaluation', 'models', 'engine']
+__all__ = ['datasets', 'evaluation', 'models', 'engine', 'apis']
 

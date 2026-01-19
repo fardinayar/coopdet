@@ -386,6 +386,8 @@ class DIVPNuscDataset(Det3DDataset):
         # Note: LiDARInstance3DBoxes uses origin=(0.5, 0.5, 0.5) by default.
         # The convert_to() method will handle conversion to the target box_mode_3d
         # if needed (e.g., converting to (0.5, 0.5, 0) for KITTI-style boxes).
+        # print("DIVPNuscDataset: get_ann_info self.box_mode_3d", self.box_mode_3d)
+        # self.box_mode_3d = Box3DMode.LIDAR(bottom_center)
         gt_bboxes_3d = LiDARInstance3DBoxes(
             gt_bboxes_3d, box_dim=gt_bboxes_3d.shape[-1], origin=(0.5, 0.5, 0.5)
         ).convert_to(self.box_mode_3d)
@@ -558,6 +560,8 @@ class DIVPNuscDataset(Det3DDataset):
                 loc = np.asarray(object_data['cuboid']['val'][:3], dtype=np.float32)
                 dim = np.asarray(object_data['cuboid']['val'][7:], dtype=np.float32)
                 rot = np.asarray(object_data['cuboid']['val'][3:7], dtype=np.float32) # Quaternion in x,y,z,w
+
+                # loc[2] += dim[2] / 2.0
 
                 # Extract yaw rotation from quaternion using 'zyx' order to match TUM Traffic dev-kit
                 # (evaluation.py line 828: as_euler("zyx", degrees=False)[0])
@@ -1827,6 +1831,7 @@ def output_to_box_dict(detection):
     labels = detection["labels_3d"].numpy()
 
     box_gravity_center = box3d.gravity_center.numpy()
+    # box_bottom_center = box3d.tensor[:, :3].numpy()
     box_dims = box3d.dims.numpy()
     box_yaw = box3d.yaw.numpy()
     # TODO: check whether this is necessary
@@ -1837,6 +1842,7 @@ def output_to_box_dict(detection):
         velocity = (*box3d.tensor[i, 7:9], 0.0)
         box = {
             "center": np.array(box_gravity_center[i]),
+            # "center": np.array(box_bottom_center[i]),
             "wlh": np.array(box_dims[i]),
             "orientation": box_yaw[i],
             "label": int(labels[i]) if not np.isnan(labels[i]) else labels[i],

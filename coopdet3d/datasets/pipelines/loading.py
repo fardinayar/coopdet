@@ -16,6 +16,7 @@ TRANSFORMS = MMDet3D_TRANSFORMS
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class LoadMultiViewImageFromFilesCoop:
     """Load multi channel images from a list of separate channel files for cooperative perception.
 
@@ -71,6 +72,7 @@ class LoadMultiViewImageFromFilesCoop:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class LoadPointsFromFileCoop:
     """Load Points From File for cooperative perception.
 
@@ -190,6 +192,7 @@ class LoadPointsFromFileCoop:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class LoadPointsFromMultiSweepsCoop:
     """Load points from multiple sweeps for cooperative perception.
 
@@ -625,6 +628,22 @@ try:
 except (KeyError, ValueError):
     # Already registered or registration failed, that's okay
     pass
+
+# Register all custom transforms in mmengine registry for compatibility with mmengine's Compose
+# This is needed because mmengine's Compose uses mmengine.registry.TRANSFORMS
+# while our transforms are registered in mmdet3d.registry.TRANSFORMS
+_custom_transforms = [
+    ('LoadMultiViewImageFromFilesCoop', LoadMultiViewImageFromFilesCoop),
+    ('LoadPointsFromFileCoop', LoadPointsFromFileCoop),
+    ('LoadPointsFromMultiSweepsCoop', LoadPointsFromMultiSweepsCoop),
+]
+
+for name, transform_class in _custom_transforms:
+    try:
+        MMEngine_TRANSFORMS.register_module(name=name, module=transform_class, force=False)
+    except (KeyError, ValueError):
+        # Already registered or registration failed, that's okay
+        pass
 
 __all__ = [
     'LoadMultiViewImageFromFilesCoop',

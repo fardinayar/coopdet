@@ -341,6 +341,8 @@ class DIVP2NuScenes(object):
                 dim = np.asarray(object_data['cuboid']['val'][7:], dtype=np.float32)
                 rot = np.asarray(object_data['cuboid']['val'][3:7], dtype=np.float32)  # Quaternion in x,y,z,w
 
+                loc[2] += dim[2] / 2.0
+
                 rot_temp = Rotation.from_quat(rot)
                 rot_temp = rot_temp.as_euler('xyz', degrees=False)
 

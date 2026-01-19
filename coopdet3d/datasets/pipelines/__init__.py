@@ -29,6 +29,21 @@ from mmdet3d.datasets.transforms import (
     ObjectNameFilter,
 )
 
+# Register mmdet3d standard transforms in mmengine registry for compatibility
+from mmengine.registry import TRANSFORMS as MMEngine_TRANSFORMS
+
+_standard_transforms = [
+    ('ObjectRangeFilter', ObjectRangeFilter),
+    ('ObjectNameFilter', ObjectNameFilter),
+]
+
+for name, transform_class in _standard_transforms:
+    try:
+        MMEngine_TRANSFORMS.register_module(name=name, module=transform_class, force=False)
+    except (KeyError, ValueError):
+        # Already registered or registration failed, that's okay
+        pass
+
 __all__ = [
     # Loading
     'LoadMultiViewImageFromFilesCoop',

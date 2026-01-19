@@ -166,6 +166,7 @@ class GLBVisualizationHook(Hook):
         out_dir (str): Output directory for GLB files
         interval (int): Save every N epochs. Default: 1
         num_samples (int): Number of samples to visualize per epoch. Default: 3
+        frame_interval (int, optional): Visualize every N frames. If set, overrides num_samples. Default: None
         score_thr (float): Score threshold for predictions. Default: 0.3
     """
 
@@ -175,30 +176,36 @@ class GLBVisualizationHook(Hook):
                  out_dir='work_dirs/visualizations',
                  interval=1,
                  num_samples=5,
+                 frame_interval=None,
                  score_thr=0.3,
                  backend_args=None):
         self.out_dir = out_dir
         self.interval = interval
         self.num_samples = num_samples
+        self.frame_interval = frame_interval
         self.score_thr = score_thr
         self.backend_args = backend_args
         self._sample_count = 0
+        self._frame_count = 0
         self._current_epoch = -1
         # Note: We can't log here as logger isn't available yet
 
     def before_val_epoch(self, runner: Runner) -> None:
         """Reset sample counter at start of validation epoch."""
         self._sample_count = 0
+        self._frame_count = 0
         self._current_epoch = runner.epoch
 
     def before_test_epoch(self, runner: Runner) -> None:
         """Reset sample counter at start of test epoch."""
         self._sample_count = 0
+        self._frame_count = 0
         # For test mode, use epoch 0 or -1 if not in training context
         self._current_epoch = getattr(runner, 'epoch', 0)
         runner.logger.info(
             f'GLBVisualizationHook: Starting test epoch, epoch={self._current_epoch}, '
             f'interval={self.interval}, num_samples={self.num_samples}, '
+            f'frame_interval={self.frame_interval}, '
             f'out_dir={self.out_dir}, score_thr={self.score_thr}'
         )
 
@@ -224,13 +231,30 @@ class GLBVisualizationHook(Hook):
             if (self._current_epoch + 1) % self.interval != 0:
                 return
 
-        # Only save first num_samples
-        if self._sample_count >= self.num_samples:
+        # Increment frame counter
+        self._frame_count += 1
+
+        # Check if we should visualize this frame
+        should_visualize = False
+        if self.frame_interval is not None:
+            # Use frame_interval: visualize every N frames
+            if self._frame_count % self.frame_interval == 0:
+                should_visualize = True
+        else:
+            # Use num_samples: visualize first N samples
+            if self._sample_count < self.num_samples:
+                should_visualize = True
+
+        if not should_visualize:
             return
 
-        # Debug logging for first iteration
-        if batch_idx == 0:
-            runner.logger.info(f'GLBVisualizationHook: Processing {mode} iteration, batch_idx={batch_idx}, sample_count={self._sample_count}/{self.num_samples}')
+        # Debug logging
+        if batch_idx == 0 or (self.frame_interval and self._frame_count % self.frame_interval == 0):
+            runner.logger.info(
+                f'GLBVisualizationHook: Processing {mode} iteration, '
+                f'batch_idx={batch_idx}, frame_count={self._frame_count}, '
+                f'sample_count={self._sample_count}'
+            )
 
         # Create epoch directory
         if mode == 'test':
@@ -242,10 +266,12 @@ class GLBVisualizationHook(Hook):
         # Visualize first sample from batch
         try:
             pred_dict = outputs[0]
-            self._visualize_sample(pred_dict, data_batch, epoch_dir, self._sample_count, runner)
+            # Use frame_count as index if using frame_interval, otherwise use sample_count
+            save_idx = self._frame_count if self.frame_interval else self._sample_count
+            self._visualize_sample(pred_dict, data_batch, epoch_dir, save_idx, runner)
             self._sample_count += 1
         except Exception as e:
-            runner.logger.warning(f'Failed to visualize sample {self._sample_count}: {e}')
+            runner.logger.warning(f'Failed to visualize frame {self._frame_count}: {e}')
             import traceback
             traceback.print_exc()
 
@@ -356,9 +382,9 @@ class GLBVisualizationHook(Hook):
         if points is not None and len(points) > 0:
             pc_xyz = points[:, :3]
             # Downsample for visualization (max 50k points)
-            if len(pc_xyz) > 50000:
-                indices = np.random.choice(len(pc_xyz), 50000, replace=False)
-                pc_xyz = pc_xyz[indices]
+            # if len(pc_xyz) > 50000:
+            #     indices = np.random.choice(len(pc_xyz), 50000, replace=False)
+            #     pc_xyz = pc_xyz[indices]
 
             # Create point cloud (dark gray for better contrast with boxes)
             pc_colors = np.ones((len(pc_xyz), 4), dtype=np.uint8) * [100, 100, 100, 255]

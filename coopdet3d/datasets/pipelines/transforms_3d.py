@@ -7,7 +7,8 @@ import torchvision
 from numpy import random
 from PIL import Image
 
-from mmdet3d.registry import TRANSFORMS
+from mmdet3d.registry import TRANSFORMS as MMDet3D_TRANSFORMS
+from mmengine.registry import TRANSFORMS as MMEngine_TRANSFORMS
 from mmdet3d.structures import (
     CameraInstance3DBoxes,
     DepthInstance3DBoxes,
@@ -18,8 +19,12 @@ from mmengine.registry import build_from_cfg
 
 from ..builder import OBJECTSAMPLERS
 
+# Use mmdet3d's TRANSFORMS registry as primary
+TRANSFORMS = MMDet3D_TRANSFORMS
+
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class ImageAug3DCoop:
     """Image augmentation for cooperative 3D detection."""
 
@@ -150,6 +155,7 @@ class ImageAug3DCoop:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class GlobalRotScaleTransCoop:
     """Global rotation, scaling and translation for cooperative perception."""
 
@@ -203,6 +209,7 @@ class GlobalRotScaleTransCoop:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class VehiclePointsToInfraCoords:
     """Transform vehicle points to infrastructure coordinates.
     
@@ -220,6 +227,7 @@ class VehiclePointsToInfraCoords:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class GridMaskCoop:
     """GridMask augmentation for cooperative perception."""
 
@@ -351,6 +359,7 @@ class GridMaskCoop:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class ObjectPasteCoop:
     """Sample GT objects to the data for cooperative perception."""
 
@@ -430,6 +439,7 @@ class ObjectPasteCoop:
 
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class PointShuffleCoop:
     """Shuffle points for cooperative perception."""
 
@@ -443,6 +453,7 @@ class PointShuffleCoop:
 # Import it from there if needed: from mmdet3d.datasets.transforms import ObjectRangeFilter
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class PointsRangeFilterCoop:
     """Filter points by the range for cooperative perception."""
 
@@ -469,6 +480,7 @@ class PointsRangeFilterCoop:
 # Import it from there if needed: from mmdet3d.datasets.transforms import ObjectNameFilter
 
 @TRANSFORMS.register_module()
+@MMEngine_TRANSFORMS.register_module()
 class ImageNormalizeCoop:
     """Normalize images for cooperative perception."""
 
@@ -488,6 +500,25 @@ class ImageNormalizeCoop:
         data["img_norm_cfg"] = dict(mean=self.mean, std=self.std)
         return data
 
+
+# Register all custom transforms in mmengine registry for compatibility with mmengine's Compose
+_custom_transforms_3d = [
+    ('ImageAug3DCoop', ImageAug3DCoop),
+    ('GlobalRotScaleTransCoop', GlobalRotScaleTransCoop),
+    ('VehiclePointsToInfraCoords', VehiclePointsToInfraCoords),
+    ('GridMaskCoop', GridMaskCoop),
+    ('ObjectPasteCoop', ObjectPasteCoop),
+    ('PointShuffleCoop', PointShuffleCoop),
+    ('PointsRangeFilterCoop', PointsRangeFilterCoop),
+    ('ImageNormalizeCoop', ImageNormalizeCoop),
+]
+
+for name, transform_class in _custom_transforms_3d:
+    try:
+        MMEngine_TRANSFORMS.register_module(name=name, module=transform_class, force=False)
+    except (KeyError, ValueError):
+        # Already registered or registration failed, that's okay
+        pass
 
 __all__ = [
     'ImageAug3DCoop',

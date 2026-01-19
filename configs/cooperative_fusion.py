@@ -198,7 +198,7 @@ model = dict(
 # Evaluation configuration
 val_evaluator = dict(
     type='TUMTrafMetric',
-    data_root='data/tumtraf_v2x_cooperative_perception_dataset_processed/',
+    data_root='../data/test_tumtraf_box_center/',
     ann_file='tumtraf_v2x_nusc_infos_val.pkl',
     metric='bbox',
     modality=dict(use_camera=True, use_lidar=True),
@@ -210,7 +210,8 @@ test_evaluator = val_evaluator
 custom_hooks = [
     dict(
         type='GLBVisualizationHook',
-        out_dir='work_dirs/visualizations',
+        out_dir='work_dirs/visualizations/tumtraf_v2x_cooperative_box_center_metric_yaw',
+        frame_interval=1,
         interval=1,  # Save every epoch
         num_samples=5,  # Visualize 5 samples per epoch
         score_thr=0.3)  # Only show predictions with score > 0.3

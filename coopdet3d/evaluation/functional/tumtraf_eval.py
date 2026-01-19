@@ -107,6 +107,8 @@ def bev_iou(gt_box: dict, pred_box: dict) -> float:
 
     gt_boxes = LiDARInstance3DBoxes(gt_tensor, box_dim=7, origin=(0.5, 0.5, 0.5))
     pred_boxes = LiDARInstance3DBoxes(pred_tensor, box_dim=7, origin=(0.5, 0.5, 0.5))
+    # gt_boxes = LiDARInstance3DBoxes(gt_tensor, box_dim=7, origin=(0.5, 0.5, 0))
+    # pred_boxes = LiDARInstance3DBoxes(pred_tensor, box_dim=7, origin=(0.5, 0.5, 0))
 
     # Get BEV representation and compute IoU
     gt_bev = gt_boxes.bev.cpu()
@@ -352,16 +354,18 @@ def accumulate_center_distance(
     pred_boxes: Dict[str, List[dict]],
     class_name: str,
     dist_th: float,
-    verbose: bool = False
+    verbose: bool = False,
+    ignore_class: bool = False
 ) -> dict:
     """Accumulate TP/FP using center distance matching (NuScenes-style).
 
     Args:
         gt_boxes: Dict mapping timestamp to list of GT boxes.
         pred_boxes: Dict mapping timestamp to list of predicted boxes.
-        class_name: Class name to evaluate.
+        class_name: Class name to evaluate (ignored if ignore_class=True).
         dist_th: Distance threshold for matching (meters).
         verbose: Whether to print debug info.
+        ignore_class: If True, ignore class labels and match any class.
 
     Returns:
         Dict with arrays: recall, precision, confidence, trans_err, vel_err, scale_err, orient_err.
@@ -370,12 +374,18 @@ def accumulate_center_distance(
     gt_boxes_all = []
     for boxes in gt_boxes.values():
         gt_boxes_all.extend(boxes)
-    npos = len([1 for box in gt_boxes_all if box["detection_name"] == class_name])
+    
+    if ignore_class:
+        # すべてのクラスをカウント
+        npos = len(gt_boxes_all)
+        if verbose:
+            print(f"Found {npos} GT boxes (all classes) for distance {dist_th}m")
+    else:
+        npos = len([1 for box in gt_boxes_all if box["detection_name"] == class_name])
+        if verbose:
+            print(f"Found {npos} GT of class {class_name} for distance {dist_th}m")
 
-    if verbose:
-        print(f"Found {npos} GT of class {class_name} for distance {dist_th}m")
-
-    # No GT for this class
+    # No GT
     if npos == 0:
         return {
             "recall": np.linspace(0, 1, 101),
@@ -387,17 +397,23 @@ def accumulate_center_distance(
             "orient_err": np.ones(101)
         }
 
-    # Collect predictions for this class
+    # Collect predictions
     pred_boxes_all = []
     for boxes in pred_boxes.values():
         pred_boxes_all.extend(boxes)
-    pred_boxes_list = [box for box in pred_boxes_all if box["detection_name"] == class_name]
-    pred_confs = [box["detection_score"] for box in pred_boxes_list]
-
-    if verbose:
-        print(f"Found {len(pred_confs)} predictions of class {class_name}")
+    
+    if ignore_class:
+        # すべての予測を使用
+        pred_boxes_list = pred_boxes_all
+        if verbose:
+            print(f"Found {len(pred_boxes_list)} predictions (all classes)")
+    else:
+        pred_boxes_list = [box for box in pred_boxes_all if box["detection_name"] == class_name]
+        if verbose:
+            print(f"Found {len(pred_boxes_list)} predictions of class {class_name}")
 
     # Sort by confidence descending
+    pred_confs = [box["detection_score"] for box in pred_boxes_list]
     sortind = np.argsort(pred_confs)[::-1]
 
     # Match predictions to GT
@@ -413,8 +429,10 @@ def accumulate_center_distance(
 
         # Find closest GT box
         for gt_idx, gt_box in enumerate(gt_boxes[pred_box["timestamp"]]):
-            if (gt_box["detection_name"] == class_name and
-                (pred_box["timestamp"], gt_idx) not in taken):
+            # クラスチェックを条件付きで行う
+            class_match = True if ignore_class else (gt_box["detection_name"] == class_name)
+            
+            if class_match and (pred_box["timestamp"], gt_idx) not in taken:
                 this_dist = center_distance(gt_box, pred_box)
                 if this_dist < min_dist:
                     min_dist = this_dist
@@ -436,7 +454,12 @@ def accumulate_center_distance(
             scale_err.append(1 - scale_iou(gt_box_match, pred_box))
 
             # Barrier orientation only determined up to 180°
-            period = np.pi if class_name == 'barrier' else 2 * np.pi
+            # ignore_classの場合は、pred_boxのクラス名を使用（なければデフォルト）
+            if ignore_class:
+                pred_class = pred_box.get("detection_name", "CAR")
+                period = np.pi if pred_class == 'barrier' else 2 * np.pi
+            else:
+                period = np.pi if class_name == 'barrier' else 2 * np.pi
             orient_err.append(yaw_diff(gt_box_match, pred_box, period=period))
         else:
             # False positive
@@ -521,18 +544,20 @@ def accumulate_iou(
     iou_th: float,
     iou_type: str = 'bev',
     difficulty: str = 'all',
-    verbose: bool = False
+    verbose: bool = False,
+    ignore_class: bool = False
 ) -> dict:
     """Accumulate TP/FP using IoU matching (KITTI-style).
 
     Args:
         gt_boxes: Dict mapping timestamp to list of GT boxes.
         pred_boxes: Dict mapping timestamp to list of predicted boxes.
-        class_name: Class name to evaluate.
+        class_name: Class name to evaluate (ignored if ignore_class=True).
         iou_th: IoU threshold for matching (e.g., 0.5, 0.7).
         iou_type: 'bev' for BEV mAP or '3d' for 3D mAP.
         difficulty: Difficulty level ('easy', 'moderate', 'hard', or 'all').
         verbose: Whether to print debug info.
+        ignore_class: If True, ignore class labels and match any class.
 
     Returns:
         Dict with arrays: recall, precision, confidence.
@@ -541,15 +566,23 @@ def accumulate_iou(
     gt_boxes_all = []
     for boxes in gt_boxes.values():
         gt_boxes_all.extend(boxes)
-    npos = len([
-        1 for box in gt_boxes_all
-        if box["detection_name"] == class_name and get_difficulty_level(box, difficulty)
-    ])
+    
+    if ignore_class:
+        npos = len([
+            1 for box in gt_boxes_all
+            if get_difficulty_level(box, difficulty)
+        ])
+        if verbose:
+            print(f"Found {npos} GT boxes (all classes) for {iou_type.upper()} IoU @ {iou_th}, difficulty={difficulty}")
+    else:
+        npos = len([
+            1 for box in gt_boxes_all
+            if box["detection_name"] == class_name and get_difficulty_level(box, difficulty)
+        ])
+        if verbose:
+            print(f"Found {npos} GT of class {class_name} for {iou_type.upper()} IoU @ {iou_th}, difficulty={difficulty}")
 
-    if verbose:
-        print(f"Found {npos} GT of class {class_name} for {iou_type.upper()} IoU @ {iou_th}, difficulty={difficulty}")
-
-    # No GT for this class
+    # No GT
     if npos == 0:
         return {
             "recall": np.linspace(0, 1, 101),
@@ -557,17 +590,22 @@ def accumulate_iou(
             "confidence": np.zeros(101),
         }
 
-    # Collect predictions for this class
+    # Collect predictions
     pred_boxes_all = []
     for boxes in pred_boxes.values():
         pred_boxes_all.extend(boxes)
-    pred_boxes_list = [box for box in pred_boxes_all if box["detection_name"] == class_name]
-    pred_confs = [box["detection_score"] for box in pred_boxes_list]
-
-    if verbose:
-        print(f"Found {len(pred_confs)} predictions of class {class_name}")
+    
+    if ignore_class:
+        pred_boxes_list = pred_boxes_all
+        if verbose:
+            print(f"Found {len(pred_boxes_list)} predictions (all classes)")
+    else:
+        pred_boxes_list = [box for box in pred_boxes_all if box["detection_name"] == class_name]
+        if verbose:
+            print(f"Found {len(pred_boxes_list)} predictions of class {class_name}")
 
     # Sort by confidence descending
+    pred_confs = [box["detection_score"] for box in pred_boxes_list]
     sortind = np.argsort(pred_confs)[::-1]
 
     # Match predictions to GT
@@ -581,7 +619,10 @@ def accumulate_iou(
 
         # Find best matching GT box (filtered by difficulty)
         for gt_idx, gt_box in enumerate(gt_boxes[pred_box["timestamp"]]):
-            if (gt_box["detection_name"] == class_name and
+            # クラスチェックを条件付きで行う
+            class_match = True if ignore_class else (gt_box["detection_name"] == class_name)
+            
+            if (class_match and
                 (pred_box["timestamp"], gt_idx) not in taken and
                 get_difficulty_level(gt_box, difficulty)):
 

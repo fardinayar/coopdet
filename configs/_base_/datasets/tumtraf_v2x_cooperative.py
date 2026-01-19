@@ -1,6 +1,6 @@
 # Dataset configuration for TUMTraf V2X Cooperative Perception Dataset
 dataset_type = 'TUMTrafV2XNuscDataset'
-dataset_root = 'data/tumtraf_v2x_cooperative_perception_dataset_processed/'
+dataset_root = '../data/test_tumtraf_box_center/'
 gt_paste_stop_epoch = -1
 reduce_beams = 32
 load_dim = 5
