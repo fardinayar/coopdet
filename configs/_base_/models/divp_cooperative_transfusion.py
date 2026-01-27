@@ -1,0 +1,109 @@
+# Base configuration for cooperative TransFusion models
+# This defines the BEVFusionCoop model structure with TransFusion head
+
+model = dict(
+    type='BEVFusionCoop',
+    coop_fuser=dict(
+        type='MaxFuser',
+        in_channels=[64, 64],  # Default to 64 channels (can be overridden in end configs)
+        out_channels=64),  # Default to 64 channels
+    vehicle=dict(
+        fusion_model=dict(
+            type='BEVFusionHeadless')),
+    infrastructure=dict(
+        fusion_model=dict(
+            type='BEVFusionHeadless')),
+    decoder=dict(
+        backbone=dict(
+            # No type specified - will use custom architecture from end configs
+            in_channels=64,  # Default to 64 channels (can be overridden in end configs)
+            out_channels=[64, 128, 256],
+            layer_nums=[3, 5, 5],
+            layer_strides=[2, 2, 2]),
+        neck=dict(
+            # No type specified - will use custom architecture from end configs
+            in_channels=[64, 128, 256],
+            out_channels=[128, 128, 128],
+            upsample_strides=[0.5, 1, 2])),
+    heads=dict(
+        object=dict(
+            type='TransFusionHead',
+            num_proposals=200,
+            auxiliary=True,
+            in_channels=None,
+            hidden_channel=128,
+            num_classes=12,
+            num_decoder_layers=1,
+            num_heads=8,
+            nms_kernel_size=3,
+            ffn_channel=256,
+            dropout=0.1,
+            bn_momentum=0.1,
+            activation='relu',
+            train_cfg=dict(
+                dataset='divp_nusc',
+                # point_cloud_range and voxel_size will be overridden in end configs
+                point_cloud_range=[-75.0, -75.0, -8.0, 75.0, 75.0, 0.0],
+                grid_size=[1500, 1500, 1],
+                voxel_size=[0.075, 0.075, 0.2],
+                out_size_factor=8,
+                gaussian_overlap=0.1,
+                min_radius=2,
+                pos_weight=-1,
+                code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2],
+                assigner=dict(
+                    type='HungarianAssigner3D',
+                    iou_calculator=dict(
+                        type='BboxOverlaps3D',
+                        coordinate='lidar'),
+                    cls_cost=dict(
+                        type='FocalLossCost',
+                        gamma=2.0,
+                        alpha=0.25,
+                        weight=0.15),
+                    reg_cost=dict(
+                        type='BBoxBEVL1Cost',
+                        weight=0.25),
+                    iou_cost=dict(
+                        type='IoU3DCost',
+                        weight=0.25))),
+            test_cfg=dict(
+                dataset='divp_nusc',
+                grid_size=[1500, 1500, 1],
+                out_size_factor=8,
+                # voxel_size and pc_range will be overridden in end configs
+                voxel_size=[0.075, 0.075],
+                pc_range=[-75.0, -75.0],
+                nms_type=None),
+            common_heads=dict(
+                center=[2, 2],
+                height=[1, 2],
+                dim=[3, 2],
+                rot=[2, 2],
+                vel=[2, 2]),
+            bbox_coder=dict(
+                type='TransFusionBBoxCoder',
+                # pc_range and voxel_size will be overridden in end configs
+                # Default values for base config (will be overridden)
+                pc_range=[-75.0, -75.0],
+                post_center_range=[-85.0, -85.0, -10.0, 85.0, 85.0, 10.0],
+                score_threshold=0.1,
+                out_size_factor=8,
+                voxel_size=[0.075, 0.075],
+                code_size=10),
+            loss_cls=dict(
+                type='mmdet.FocalLoss',
+                use_sigmoid=True,
+                gamma=2.0,
+                alpha=0.25,
+                reduction='mean',
+                loss_weight=1.0),
+            loss_heatmap=dict(
+                type='mmdet.GaussianFocalLoss',
+                reduction='mean',
+                loss_weight=1.0),
+            loss_bbox=dict(
+                type='mmdet.L1Loss',
+                reduction='mean',
+                loss_weight=0.25))))
+

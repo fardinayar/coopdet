@@ -6,6 +6,7 @@ from mmdet3d.registry import DATASETS
 # Import dataset classes
 from .tumtraf_dataset import TUMTrafNuscDataset
 from .tumtraf_v2x_dataset import TUMTrafV2XNuscDataset
+from .divp_dataset import DIVPNuscDataset
 
 # Import pipelines to register transforms
 from . import pipelines
@@ -16,4 +17,5 @@ __all__ = [
     'OBJECTSAMPLERS',
     'TUMTrafNuscDataset',
     'TUMTrafV2XNuscDataset',
+    'DIVPNuscDataset',
 ]
